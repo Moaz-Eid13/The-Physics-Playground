@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 // Tasks imports
 import Task1 from './tasks/Task1'
+import Task2 from './tasks/Task2'
 
 const TASKS = [
   { id: 1, title: 'Random Walk', shortTitle: 'Task 1' },
@@ -103,6 +104,7 @@ function MainPanel({selectedId, onEnter}) {
   const renderContent = () => {
     if (selectedId === null) return <HomePage onEnter={onEnter} />
     if (selectedId === 1) return <Task1 />
+    if (selectedId === 2) return <Task2 />
     return (
       <div className="flex items-center justify-center h-full text-neutral-600 text-sm">
         Task {selectedId} - coming soon

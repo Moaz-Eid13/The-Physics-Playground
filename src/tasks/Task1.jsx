@@ -1,6 +1,7 @@
-import { useRef, useState, useEffect, useCallback } from 'react'
-
-// ─── Physics helpers ──────────────────────────────────────────────────────────
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { Equation, InlineEq } from '../components/Equation'
+import { range } from 'three/tsl'
 
 function generateWalkPath(N, s) {
   const points = [{ x: 0, y: 0 }]
@@ -19,8 +20,6 @@ function getDisplacement(points) {
   const last = points[points.length - 1]
   return Math.sqrt(last.x ** 2 + last.y ** 2)
 }
-
-// ─── Explanation Panel ────────────────────────────────────────────────────────
 
 function ExplanationPanel() {
   const [isOpen, setIsOpen] = useState(true)
@@ -43,24 +42,20 @@ function ExplanationPanel() {
         <div className="px-5 py-5 text-[13px] text-neutral-400 leading-relaxed space-y-3">
           <p>
             A <strong className="text-white">random walk</strong> is a path
-            consisting of N steps, each of size s, taken in a completely random
-            direction. At each step, the angle θ is drawn from a uniform
-            distribution over [0, 2π].
+            consisting of <InlineEq>N</InlineEq> steps, each of size{' '}
+            <InlineEq>s</InlineEq>, taken in a completely random direction. 
+            At each step, the angle <InlineEq>θ</InlineEq> is drawn from a uniform
+            distribution over <InlineEq>[0, 2π]</InlineEq>.
           </p>
           <p>The position after each step is updated as:</p>
-          <div className="bg-[#0a0a0f] border border-[#222233] rounded px-5 py-3 font-mono text-[13px] text-blue-400">
-            x(n+1) = x(n) + s·cos(θ)<br />
-            y(n+1) = y(n) + s·sin(θ)<br />
-            θ ~ Uniform(0, 2π)
-          </div>
+          <Equation>xₙ₊₁ = xₙ + s·cos(θ)</Equation>
+          <Equation>yₙ₊₁ = yₙ + s·sin(θ),  θ ~ Uniform(0, 2π)</Equation>
           <p>
             For a large number of steps, the{' '}
             <strong className="text-white">expected displacement</strong>{' '}
             averaged over many walks grows as:
           </p>
-          <div className="bg-[#0a0a0f] border border-[#222233] rounded px-5 py-3 font-mono text-[13px] text-blue-400">
-            {'<'}d{'>'} = s·√N
-          </div>
+          <Equation>⟨d⟩ = s√N</Equation>
           <p>
             Any single walk may land far from this value — the formula is a
             statistical average. Run multiple walks to see the average converge.
@@ -75,9 +70,7 @@ function ExplanationPanel() {
   )
 }
 
-// ─── Slider ───────────────────────────────────────────────────────────────────
-
-function SliderControl({ label, value, min, max, step, onChange }) {
+function SliderControl({ label, value, min, max, step, onChange, disabled }) {
   return (
     <div className="mb-4">
       <div className="flex justify-between mb-1.5 text-[12px] text-neutral-400">
@@ -91,35 +84,37 @@ function SliderControl({ label, value, min, max, step, onChange }) {
         step={step}
         value={value}
         onChange={e => onChange(Number(e.target.value))}
+        disabled={disabled}
         className="w-full accent-blue-500"
       />
     </div>
   )
 }
 
-// ─── Controls ─────────────────────────────────────────────────────────────────
-
 function Controls({ N, setN, s, setS, numWalks, setNumWalks, onStart, onReset, isRunning }) {
   return (
-    <div className="bg-[#111118] border border-[#222233] rounded-lg p-5 mb-6">
+    <div className="bg-[#111118] border border-[#222233] rounded-lg p-5 mb-4">
       <div className="text-[11px] text-neutral-600 tracking-wider mb-4">
         PARAMETERS
       </div>
 
       <SliderControl
-        label="N — Steps per walk"
+        label="N - Steps per walk"
         value={N} min={10} max={2000} step={10}
         onChange={setN}
+        disabled={isRunning}
       />
       <SliderControl
-        label="s — Step size"
+        label="s - Step size"
         value={s} min={1} max={20} step={1}
         onChange={setS}
+        disabled={isRunning}
       />
       <SliderControl
-        label="Walks — Number of walks"
+        label="Walks - Number of walks"
         value={numWalks} min={1} max={20} step={1}
         onChange={setNumWalks}
+        disabled={isRunning}
       />
 
       <div className="text-[12px] text-neutral-600 font-mono mb-4">
@@ -130,13 +125,15 @@ function Controls({ N, setN, s, setS, numWalks, setNumWalks, onStart, onReset, i
         <button
           onClick={onStart}
           disabled={isRunning}
-          className="px-5 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-neutral-800 disabled:text-neutral-600 text-white text-[13px] rounded cursor-pointer disabled:cursor-not-allowed transition-colors"
+          className="px-5 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-neutral-800 disabled:text-neutral-600 
+          text-white text-[13px] rounded cursor-pointer disabled:cursor-not-allowed transition-colors"
         >
           {isRunning ? 'Running...' : 'Start'}
         </button>
         <button
           onClick={onReset}
-          className="px-5 py-2 bg-transparent hover:border-neutral-500 hover:text-white text-neutral-400 text-[13px] rounded border border-neutral-700 cursor-pointer transition-colors"
+          className="px-5 py-2 bg-transparent hover:border-neutral-500 hover:text-white text-neutral-400 text-[13px] 
+          rounded border border-neutral-700 cursor-pointer transition-colors"
         >
           Reset
         </button>
@@ -145,32 +142,16 @@ function Controls({ N, setN, s, setS, numWalks, setNumWalks, onStart, onReset, i
   )
 }
 
-// ─── Canvas ───────────────────────────────────────────────────────────────────
-
-// Each walk gets a distinct hue so they're visually separable
-// We spread hues evenly around the color wheel
-function walkColor(index, total, alpha = 1) {
+function walkColor(index, total) {
   const hue = (index / total) * 360
-  return `hsla(${hue}, 80%, 60%, ${alpha})`
+  return `hsla(${hue}, 80%, 60%, 1)`
 }
 
 function WalkCanvas({ walks, stepIndex, showVector }) {
   const canvasRef = useRef(null)
 
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const size = canvas.width
-
-    ctx.clearRect(0, 0, size, size)
-    ctx.fillStyle = '#0a0a0f'
-    ctx.fillRect(0, 0, size, size)
-
-    if (walks.length === 0) return
-
-    // Find bounding box across ALL walks combined
-    // so they all share the same coordinate system
+  const viewport = useMemo(() => {
+    if (walks.length === 0) return null
     const allPoints = walks.flat()
     const xs = allPoints.map(p => p.x)
     const ys = allPoints.map(p => p.y)
@@ -179,6 +160,7 @@ function WalkCanvas({ walks, stepIndex, showVector }) {
     const minY = Math.min(...ys)
     const maxY = Math.max(...ys)
 
+    const size = 500
     const padding = 40
     const rangeX = maxX - minX || 1
     const rangeY = maxY - minY || 1
@@ -186,18 +168,28 @@ function WalkCanvas({ walks, stepIndex, showVector }) {
       (size - padding * 2) / rangeX,
       (size - padding * 2) / rangeY
     )
+    return { minX, minY, rangeX, rangeY, scale, padding, size }
+  }, [walks])
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !viewport ) return
+    const ctx = canvas.getContext('2d')
+    const { minX, minY, rangeX, rangeY, scale, padding, size } = viewport
+
+    ctx.clearRect(0, 0, size, size)
+    ctx.fillStyle = '#0a0a0f'
+    ctx.fillRect(0, 0, size, size)
 
     const toCanvas = (x, y) => ({
       cx: padding + (x - minX) * scale + (size - padding * 2 - rangeX * scale) / 2,
       cy: padding + (y - minY) * scale + (size - padding * 2 - rangeY * scale) / 2,
     })
 
-    // Draw each walk
     walks.forEach((points, walkIdx) => {
       const color = walkColor(walkIdx, walks.length)
       const visiblePoints = points.slice(0, stepIndex + 1)
 
-      // Draw path
       ctx.strokeStyle = color
       ctx.lineWidth = 1
       ctx.globalAlpha = 0.7
@@ -213,7 +205,6 @@ function WalkCanvas({ walks, stepIndex, showVector }) {
       const last = visiblePoints[visiblePoints.length - 1]
       if (!last) return
 
-      // Draw displacement vector when walk is complete
       if (showVector && stepIndex >= points.length - 1) {
         const { cx: x0, cy: y0 } = toCanvas(0, 0)
         const { cx: x1, cy: y1 } = toCanvas(last.x, last.y)
@@ -227,7 +218,6 @@ function WalkCanvas({ walks, stepIndex, showVector }) {
         ctx.stroke()
         ctx.setLineDash([])
 
-        // Arrowhead at the end
         const angle = Math.atan2(y1 - y0, x1 - x0)
         const arrowSize = 7
         ctx.fillStyle = color
@@ -245,7 +235,6 @@ function WalkCanvas({ walks, stepIndex, showVector }) {
         ctx.fill()
       }
 
-      // Current position dot
       const { cx, cy } = toCanvas(last.x, last.y)
       ctx.fillStyle = color
       ctx.beginPath()
@@ -253,7 +242,6 @@ function WalkCanvas({ walks, stepIndex, showVector }) {
       ctx.fill()
     })
 
-    // Draw shared origin — green dot
     const { cx: ox, cy: oy } = toCanvas(0, 0)
     ctx.fillStyle = '#00ff88'
     ctx.beginPath()
@@ -272,12 +260,76 @@ function WalkCanvas({ walks, stepIndex, showVector }) {
   )
 }
 
-// ─── Stats Panel ──────────────────────────────────────────────────────────────
+function DisplacementHistogram({ walks, stepIndex, theoretical }) {
+    if (walks.length < 2 || stepIndex < 2) return null
+
+    const displacements = walks.map(points => {
+      const visible = points.slice(0, stepIndex + 1)
+      return getDisplacement(visible)
+    })
+
+    const maxD = Math.max(...displacements, theoretical) * 1.2
+    const numBins = Math.min(10, walks.length)
+    const binWidth = maxD / numBins
+
+    const bins = Array.from({ length: numBins }, (_, i) => {
+      const binStart = i * binWidth
+      const binEnd = binStart + binWidth
+      const count = displacements.filter(d => d >= binStart && d < binEnd).length
+      return {
+        range: `${binStart.toFixed(0)}-${binEnd.toFixed(0)}`,
+        count,
+      }
+    })
+
+    return (
+      <div className="bg-[#111118] border border-[#222233] rounded-lg p-4 mt-4">
+        <div className="text-[11px] text-neutral-600 tracking-wider mb-1">
+          DISPLACEMENT DISTRIBUTION
+        </div>
+        <div className="text-[10px] text-neutral-700 mb-3">
+          n = {walks.length} walks · dashed reference = theoretical ⟨d⟩ = s√N = {theoretical.toFixed(2)}
+        </div>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={bins}>
+            <CartesianGrid 
+              strokeDasharray="3 3"
+              stroke="#222233"
+            />
+            <XAxis 
+              dataKey="range"
+              stroke="#555"
+              tick={{ fontSize: 11, fill: '#666' }}
+              label={{ value: 'Displacement (px)', position: 'insideBottom', offset: -5,
+                fontSize: 11, fill: '#666'
+              }}
+            />
+            <YAxis
+              stroke="#555"
+              allowDecimals={false}
+              tick={{ fontSize: 11, fill: '#666'}}
+              label={{ value: 'Count', angle: -90, position: 'insideCenter', fontSize: 11, fill: '#666' }}
+            />
+            <Tooltip
+              contentStyle={{ background: '#111118', border: '1px solid #222233', fontSize: 12 }}
+              labelStyle={{ color: '#aaa' }}
+            />
+            <Bar
+              dataKey="count"
+              fill="#4f8ef7"
+              fillOpacity={0.6}
+              stroke="#4f8ef7"
+              strokeWidth={1}
+            />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+    )
+}
 
 function StatsPanel({ walks, stepIndex, s, N }) {
   if (walks.length === 0 || stepIndex < 2) return null
 
-  // Compute displacement for each completed walk
   const displacements = walks.map(points => {
     const visible = points.slice(0, stepIndex + 1)
     return getDisplacement(visible)
@@ -288,19 +340,18 @@ function StatsPanel({ walks, stepIndex, s, N }) {
   const isComplete = stepIndex >= N
 
   return (
-    <div className="bg-[#111118] border border-[#222233] rounded-lg p-4 mt-4 font-mono text-[12px] text-neutral-400 space-y-2">
-      {/* Walk counter */}
+    <div className="bg-[#111118] border border-[#222233] rounded-lg p-4 mt-4 
+                    font-mono text-[12px] text-neutral-400 space-y-2"
+    >
       <div className="flex justify-between">
         <span>Walks drawn</span>
         <span className="text-white">{walks.length}</span>
       </div>
-
       <div className="flex justify-between">
         <span>Steps taken</span>
         <span className="text-white">{Math.min(stepIndex, N)}</span>
       </div>
 
-      {/* Per-walk displacements */}
       <div className="border-t border-[#222233] pt-2 space-y-1">
         {displacements.map((d, i) => (
           <div key={i} className="flex justify-between">
@@ -310,7 +361,6 @@ function StatsPanel({ walks, stepIndex, s, N }) {
         ))}
       </div>
 
-      {/* Average vs theoretical */}
       <div className="border-t border-[#222233] pt-2 space-y-1">
         <div className="flex justify-between">
           <span>Average displacement</span>
@@ -329,12 +379,15 @@ function StatsPanel({ walks, stepIndex, s, N }) {
             </span>
           </div>
         )}
+        {isComplete && (
+          <div className="text-[10px] text-neutral-600 pt-1">
+            Small differences are expected — this is sampling variance. Increase "Walks" to converge closer to theory.
+          </div>
+        )}
       </div>
     </div>
   )
 }
-
-// ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function Task1() {
   const [N, setN] = useState(200)
@@ -357,14 +410,12 @@ export default function Task1() {
   }, [])
 
   const handleStart = useCallback(() => {
-    // Generate all walks upfront
     const allWalks = Array.from({ length: numWalks }, () => generateWalkPath(N, s))
     setWalks(allWalks)
     setIsRunning(true)
     stepRef.current = 0
 
     const animate = () => {
-      // advance 4 steps per frame — feels smooth for most N values
       stepRef.current += 4
 
       if (stepRef.current >= N) {
@@ -387,9 +438,10 @@ export default function Task1() {
     }
   }, [])
 
+  const theoretical = s * Math.sqrt(N)
+
   return (
     <div className="p-8 max-w-4xl mx-auto">
-      {/* Header */}
       <div className="mb-8">
         <div className="text-[11px] text-neutral-600 tracking-widest mb-2">TASK 01</div>
         <h1 className="text-3xl font-bold text-white mb-2">Random Walk</h1>
@@ -400,7 +452,6 @@ export default function Task1() {
 
       <ExplanationPanel />
 
-      {/* Two column layout */}
       <div className="flex gap-6 items-start">
         <div className="w-64 min-w-64">
           <Controls
@@ -412,7 +463,6 @@ export default function Task1() {
             isRunning={isRunning}
           />
 
-          {/* Show vector toggle */}
           <div className="bg-[#111118] border border-[#222233] rounded-lg p-4">
             <div className="text-[11px] text-neutral-600 tracking-wider mb-3">
               DISPLAY OPTIONS
@@ -442,6 +492,11 @@ export default function Task1() {
             stepIndex={stepIndex}
             s={s}
             N={N}
+          />
+          <DisplacementHistogram
+            walks={walks}
+            stepIndex={stepIndex}
+            theoretical={theoretical}
           />
         </div>
       </div>
